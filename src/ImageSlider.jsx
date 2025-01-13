@@ -10,75 +10,99 @@ const images = [
 
 const ImageSlider = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [touchStartX, setTouchStartX] = useState(0);
+  const [touchStartX, setTouchStartX] = useState(null);
   const [isSwiping, setIsSwiping] = useState(false);
+  const [touchPoints, setTouchPoints] = useState(new Set());
   const sliderRef = useRef(null);
 
   const handleTouchStart = (e) => {
-    console.log("Touch start - number of touches:", e.touches.length);
+    // Track each touch point
+    const newTouchPoints = new Set(touchPoints);
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      newTouchPoints.add(e.changedTouches[i].identifier);
+    }
+    setTouchPoints(newTouchPoints);
 
-    if (e.touches.length === 2) {
+    console.log("Touch points after start:", newTouchPoints.size);
+
+    // Only initiate swipe if exactly two fingers are used
+    if (newTouchPoints.size === 2) {
       e.preventDefault();
       setIsSwiping(true);
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       const middleX = (touch1.clientX + touch2.clientX) / 2;
       setTouchStartX(middleX);
-      console.log("Two finger touch detected at:", middleX);
+      console.log("Two finger touch started at:", middleX);
     }
   };
 
   const handleTouchMove = (e) => {
-    if (e.touches.length === 2) {
+    if (touchPoints.size === 2 && isSwiping) {
       e.preventDefault();
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const currentX = (touch1.clientX + touch2.clientX) / 2;
-      console.log("Two finger move at:", currentX);
+      console.log("Two finger move detected");
     }
   };
 
   const handleTouchEnd = (e) => {
-    console.log("Touch end - changed touches:", e.changedTouches.length);
+    // Remove ended touch points
+    const newTouchPoints = new Set(touchPoints);
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      newTouchPoints.delete(e.changedTouches[i].identifier);
+    }
+    setTouchPoints(newTouchPoints);
 
-    if (!isSwiping) return;
+    console.log("Touch points after end:", newTouchPoints.size);
 
-    if (e.changedTouches.length === 2) {
+    if (isSwiping && touchStartX !== null && e.changedTouches.length > 0) {
       const touch1 = e.changedTouches[0];
       const touch2 = e.changedTouches[1];
-      const endX = (touch1.clientX + touch2.clientX) / 2;
-      const diff = touchStartX - endX;
 
-      console.log("Swipe difference:", diff);
+      if (touch1 && touch2) {
+        const endX = (touch1.clientX + touch2.clientX) / 2;
+        const diff = touchStartX - endX;
 
-      if (Math.abs(diff) > 50) {
-        if (diff > 0 && currentIndex < images.length - 1) {
-          setCurrentIndex((prev) => prev + 1);
-        } else if (diff < 0 && currentIndex > 0) {
-          setCurrentIndex((prev) => prev - 1);
+        console.log("Swipe difference:", diff);
+
+        if (Math.abs(diff) > 50) {
+          if (diff > 0 && currentIndex < images.length - 1) {
+            setCurrentIndex((prev) => prev + 1);
+          } else if (diff < 0 && currentIndex > 0) {
+            setCurrentIndex((prev) => prev - 1);
+          }
         }
       }
     }
 
+    // Reset if all touches have ended
+    if (newTouchPoints.size === 0) {
+      setIsSwiping(false);
+      setTouchStartX(null);
+    }
+  };
+
+  const handleTouchCancel = (e) => {
+    setTouchPoints(new Set());
     setIsSwiping(false);
+    setTouchStartX(null);
   };
 
   useEffect(() => {
     const slider = sliderRef.current;
     if (!slider) return;
 
-    // Add event listeners with passive: false
     slider.addEventListener("touchstart", handleTouchStart, { passive: false });
     slider.addEventListener("touchmove", handleTouchMove, { passive: false });
     slider.addEventListener("touchend", handleTouchEnd);
+    slider.addEventListener("touchcancel", handleTouchCancel);
 
-    // Cleanup
     return () => {
       slider.removeEventListener("touchstart", handleTouchStart);
       slider.removeEventListener("touchmove", handleTouchMove);
       slider.removeEventListener("touchend", handleTouchEnd);
+      slider.removeEventListener("touchcancel", handleTouchCancel);
     };
-  }, [currentIndex]); // Re-add listeners if currentIndex changes
+  }, [currentIndex, touchPoints, isSwiping, touchStartX]);
 
   return (
     <div className="slider-container">
