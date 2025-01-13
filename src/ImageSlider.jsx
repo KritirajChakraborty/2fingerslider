@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import "./ImageSlider.css"; // Add styles as needed
 
 const images = [
@@ -10,87 +10,115 @@ const images = [
 
 const ImageSlider = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [startX, setStartX] = useState(null);
-  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const sliderRef = useRef(null);
 
-  // Helper to navigate images circularly
-  const updateIndex = (direction) => {
-    if (direction === "left") {
-      setCurrentIndex((prevIndex) =>
-        prevIndex === 0 ? images.length - 1 : prevIndex - 1
-      );
-    } else if (direction === "right") {
-      setCurrentIndex((prevIndex) =>
-        prevIndex === images.length - 1 ? 0 : prevIndex + 1
-      );
-    }
-  };
-
-  // Touch Handlers
   const handleTouchStart = (e) => {
+    console.log("Touch start - number of touches:", e.touches.length);
+
     if (e.touches.length === 2) {
-      const touch1 = e.touches[0].clientX;
-      const touch2 = e.touches[1].clientX;
-      console.log("Two fingers detected:", touch1, touch2);
-      setStartX(touch1);
-    } else {
-      console.log("Single finger detected");
+      e.preventDefault();
+      setIsSwiping(true);
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const middleX = (touch1.clientX + touch2.clientX) / 2;
+      setTouchStartX(middleX);
+      console.log("Two finger touch detected at:", middleX);
     }
   };
 
   const handleTouchMove = (e) => {
     if (e.touches.length === 2) {
-      const touch1 = e.touches[0].clientX;
-      const touch2 = e.touches[1].clientX;
-      console.log("Two fingers moving:", touch1, touch2);
-      // Implement your sliding logic for two fingers
+      e.preventDefault();
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const currentX = (touch1.clientX + touch2.clientX) / 2;
+      console.log("Two finger move at:", currentX);
     }
   };
 
-  const handleTouchEnd = () => {
-    setStartX(null);
-  };
+  const handleTouchEnd = (e) => {
+    console.log("Touch end - changed touches:", e.changedTouches.length);
 
-  // Mouse Handlers
-  const handleMouseDown = (e) => {
-    setIsMouseDown(true);
-    setStartX(e.clientX);
-  };
+    if (!isSwiping) return;
 
-  const handleMouseMove = (e) => {
-    if (isMouseDown) {
-      const currentX = e.clientX;
+    if (e.changedTouches.length === 2) {
+      const touch1 = e.changedTouches[0];
+      const touch2 = e.changedTouches[1];
+      const endX = (touch1.clientX + touch2.clientX) / 2;
+      const diff = touchStartX - endX;
 
-      if (startX && Math.abs(currentX - startX) > 50) {
-        if (currentX < startX) {
-          // Swipe left
-          updateIndex("right");
-        } else {
-          // Swipe right
-          updateIndex("left");
+      console.log("Swipe difference:", diff);
+
+      if (Math.abs(diff) > 50) {
+        if (diff > 0 && currentIndex < images.length - 1) {
+          setCurrentIndex((prev) => prev + 1);
+        } else if (diff < 0 && currentIndex > 0) {
+          setCurrentIndex((prev) => prev - 1);
         }
-        setStartX(null); // Reset startX after swipe
       }
     }
+
+    setIsSwiping(false);
   };
 
-  const handleMouseUp = () => {
-    setIsMouseDown(false);
-    setStartX(null);
-  };
+  useEffect(() => {
+    const slider = sliderRef.current;
+    if (!slider) return;
+
+    // Add event listeners with passive: false
+    slider.addEventListener("touchstart", handleTouchStart, { passive: false });
+    slider.addEventListener("touchmove", handleTouchMove, { passive: false });
+    slider.addEventListener("touchend", handleTouchEnd);
+
+    // Cleanup
+    return () => {
+      slider.removeEventListener("touchstart", handleTouchStart);
+      slider.removeEventListener("touchmove", handleTouchMove);
+      slider.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [currentIndex]); // Re-add listeners if currentIndex changes
 
   return (
-    <div
-      className="slider"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      //   onMouseDown={handleMouseDown}
-      //   onMouseMove={handleMouseMove}
-      //   onMouseUp={handleMouseUp}
-      //   onMouseLeave={handleMouseUp} // Reset if mouse leaves slider area
-    >
-      <img src={images[currentIndex]} alt="slider" className="slider-image" />
+    <div className="slider-container">
+      <div
+        ref={sliderRef}
+        className="slider"
+        style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+      >
+        {images.map((src, index) => (
+          <div key={index} className="slide">
+            <img src={src} alt={`Slide ${index + 1}`} draggable="false" />
+          </div>
+        ))}
+      </div>
+
+      <div className="dots">
+        {images.map((_, index) => (
+          <button
+            key={index}
+            className={`dot ${index === currentIndex ? "active" : ""}`}
+            onClick={() => setCurrentIndex(index)}
+          />
+        ))}
+      </div>
+
+      <button
+        className="nav-button prev"
+        onClick={() => currentIndex > 0 && setCurrentIndex((prev) => prev - 1)}
+      >
+        ←
+      </button>
+      <button
+        className="nav-button next"
+        onClick={() =>
+          currentIndex < images.length - 1 &&
+          setCurrentIndex((prev) => prev + 1)
+        }
+      >
+        →
+      </button>
     </div>
   );
 };
